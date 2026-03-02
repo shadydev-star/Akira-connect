@@ -4,7 +4,7 @@ import "../../styles/companyDashboard.css";
 import PostJobModal from "../../components/PostJobModal";
 
 export default function CompanyDashboard() {
-  const [companyName, setCompanyName] = useState("Company");
+  const [companyName, _setCompanyName] = useState("Company");
   const [jobs, setJobs] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
 
