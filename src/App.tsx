@@ -16,11 +16,40 @@ function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Add a timeout to prevent infinite loading (10 seconds max)
+    // Flag to prevent state updates after unmount
+    let isMounted = true;
+    
+    // Add a timeout to prevent infinite loading (increased to 15 seconds for slow devices)
     const timeoutId = setTimeout(() => {
-      console.log("⚠️ Loading timeout - forcing loading to false");
-      setLoading(false);
-    }, 10000);
+      if (isMounted) {
+        console.log("⚠️ Loading timeout - forcing loading to false");
+        setLoading(false);
+      }
+    }, 15000);
+
+    const fetchUserProfile = async (userId: string) => {
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", userId)
+          .single();
+
+        if (profileError) {
+          if (profileError.code === 'PGRST116') {
+            console.log("📝 User profile not found");
+            if (isMounted) setRole(null);
+          } else {
+            throw profileError;
+          }
+        } else if (profile && isMounted) {
+          console.log("📝 Profile found:", profile.role);
+          setRole(profile.role as UserRole);
+        }
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+      }
+    };
 
     const checkUser = async (retryCount = 0): Promise<void> => {
       try {
@@ -29,7 +58,7 @@ function App() {
         
         console.log("🔍 Checking user session...");
         
-        // First check if there's a session (this doesn't throw errors)
+        // First check if there's a session
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
         
         // Handle lock timeout errors with retry
@@ -41,16 +70,16 @@ function App() {
             
             if (retryCount < 3) {
               console.log(`⏳ Lock timeout, retrying... (${retryCount + 1}/3)`);
-              // Wait longer each retry (exponential backoff)
               const delay = 500 * Math.pow(2, retryCount);
               await new Promise(resolve => setTimeout(resolve, delay));
               return checkUser(retryCount + 1);
             } else {
-              console.log("⚠️ Max retries reached for lock timeout - continuing without session");
-              // After max retries, assume no session and continue
-              setRole(null);
-              setLoading(false);
-              clearTimeout(timeoutId);
+              console.log("⚠️ Max retries reached for lock timeout");
+              if (isMounted) {
+                setRole(null);
+                setLoading(false);
+                clearTimeout(timeoutId);
+              }
               return;
             }
           }
@@ -58,11 +87,12 @@ function App() {
         }
         
         if (!sessionData.session) {
-          // No session means user is not logged in - that's fine!
           console.log("No active session - user is not logged in");
-          setRole(null);
-          setLoading(false);
-          clearTimeout(timeoutId);
+          if (isMounted) {
+            setRole(null);
+            setLoading(false);
+            clearTimeout(timeoutId);
+          }
           return;
         }
 
@@ -70,43 +100,25 @@ function App() {
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         
         if (userError) {
-          // Check if it's an auth session error
           if (userError.name === 'AuthSessionMissingError' || 
               userError.message?.includes('Auth session missing')) {
             console.log("Session expired or invalid");
-            setRole(null);
-            setLoading(false);
-            clearTimeout(timeoutId);
+            if (isMounted) {
+              setRole(null);
+              setLoading(false);
+              clearTimeout(timeoutId);
+            }
             return;
           }
           throw userError;
         }
 
-        if (user) {
+        if (user && isMounted) {
           console.log("👤 User found:", user.email);
-          
-          const { data: profile, error: profileError } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", user.id)
-            .single();
-
-          if (profileError) {
-            // Profile not found - user might need to complete signup
-            if (profileError.code === 'PGRST116') {
-              console.log("📝 User profile not found");
-              setRole(null);
-            } else {
-              throw profileError;
-            }
-          } else if (profile) {
-            console.log("📝 Profile found:", profile.role);
-            setRole(profile.role as UserRole);
-          }
+          await fetchUserProfile(user.id);
         }
       } catch (err) {
-        // Handle specific lock errors gracefully
-        if (err instanceof Error) {
+        if (err instanceof Error && isMounted) {
           const isLockError = err.name === 'NavigatorLockAcquireTimeoutError' || 
                               err.message?.includes('Navigator LockManager') ||
                               err.message?.includes('timed out waiting');
@@ -116,52 +128,56 @@ function App() {
                              err.message?.includes('JWT');
           
           if (isLockError) {
-            console.log("🔐 Auth lock issue, but continuing to login page");
-            // Don't set error state for lock issues, just treat as not logged in
+            console.log("🔐 Auth lock issue, treating as not logged in");
             setRole(null);
           } else if (!isAuthError) {
-            // Only show real errors
             console.error("❌ Error checking user:", err);
             setError(err.message);
           } else {
             console.log("Authentication state: No valid session");
             setRole(null);
           }
-        } else {
-          console.error("Unknown error:", err);
-          setError("Failed to load user data");
         }
       } finally {
-        setLoading(false);
-        clearTimeout(timeoutId);
+        if (isMounted) {
+          setLoading(false);
+          clearTimeout(timeoutId);
+        }
       }
     };
 
-    checkUser();
-
-    // Set up auth state listener
+    // Set up auth state listener FIRST to catch any immediate events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log("🔄 Auth state changed:", event);
+        
+        if (!isMounted) return;
+
         if (event === 'SIGNED_IN' && session?.user) {
-          // Fetch user profile on sign in
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", session.user.id)
-            .single();
-          
-          if (profile) {
-            setRole(profile.role as UserRole);
-          }
+          console.log("👤 User signed in, fetching profile...");
+          setLoading(true); // Show loading while fetching profile
+          await fetchUserProfile(session.user.id);
+          setLoading(false);
         } else if (event === 'SIGNED_OUT') {
+          console.log("👋 User signed out");
           setRole(null);
+          setLoading(false);
+        } else if (event === 'TOKEN_REFRESHED') {
+          console.log("🔄 Token refreshed");
+          // Optionally re-check user
+          if (session?.user) {
+            await fetchUserProfile(session.user.id);
+          }
         }
       }
     );
 
+    // THEN check current session
+    checkUser();
+
     // Cleanup subscription and timeout
     return () => {
+      isMounted = false;
       subscription?.unsubscribe();
       clearTimeout(timeoutId);
     };
@@ -187,7 +203,7 @@ function App() {
           borderRadius: "50%", 
           animation: "spin 1s linear infinite" 
         }} />
-        <p>Loading...</p>
+        <p>Checking credentials...</p>
         <style>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -240,14 +256,9 @@ function App() {
 
   return (
     <Routes>
-      {/* Root redirect */}
       <Route path="/" element={getRootRedirect()} />
-
-      {/* Public routes */}
       <Route path="/signup" element={<Signup />} />
       <Route path="/login" element={<Login />} />
-
-      {/* Protected freelancer dashboard */}
       <Route
         path="/dashboard/freelancer"
         element={
@@ -256,8 +267,6 @@ function App() {
           </ProtectedRoute>
         }
       />
-
-      {/* Protected company dashboard */}
       <Route
         path="/dashboard/company"
         element={
@@ -266,8 +275,6 @@ function App() {
           </ProtectedRoute>
         }
       />
-
-      {/* Catch-all route */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
