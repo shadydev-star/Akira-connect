@@ -73,7 +73,8 @@ function App() {
     );
   }
 
-  const getRootRedirect = (): JSX.Element => {
+  // FIXED: Removed the return type annotation ": JSX.Element"
+  const getRootRedirect = () => {
     switch (role) {
       case "freelancer":
         return <Navigate to="/dashboard/freelancer" replace />;
