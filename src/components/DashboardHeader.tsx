@@ -1,5 +1,5 @@
 // src/components/DashboardHeader.tsx
-import { FC } from "react";
+import type { FC } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../services/supabase";
 import "../styles/dashboardHeader.css";
