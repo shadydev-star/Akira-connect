@@ -43,7 +43,7 @@ interface Applicant {
 }
 
 export default function CompanyDashboard() {
-  const [companyName, setCompanyName] = useState("TechCorp Inc.");
+  const [companyName, setCompanyName ] = useState("TechCorp Inc.");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "jobs" | "applicants">("overview");
