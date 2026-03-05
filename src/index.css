@@ -48,7 +48,7 @@ body {
   padding: 12px;
   border-radius: 8px;
   border: none;
-  background: #2563eb;
+  background: #9709aa;
   color: white;
   font-weight: 600;
   cursor: pointer;
@@ -56,7 +56,7 @@ body {
 }
 
 .auth-card button:hover {
-  background: #1e4ed8;
+  background: #9709aa;
 }
 
 .auth-footer {
@@ -66,7 +66,7 @@ body {
 }
 
 .auth-footer a {
-  color: #2563eb;
+  color: #9709aa;
   text-decoration: none;
   font-weight: 500;
 }
