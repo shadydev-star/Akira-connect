@@ -1,30 +1,25 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../services/supabase";
 import "../../styles/dashboard.css";
+import DashboardHeader from "../../components/DashboardHeader";
 
 export default function FreelancerDashboard() {
   const [freelancerName, _setFreelancerName] = useState("Freelancer");
   const [jobs, setJobs] = useState<any[]>([]);
 
   useEffect(() => {
-    // fetch suggested jobs
     const fetchJobs = async () => {
-      const { data, error } = await supabase
-        .from("jobs")
-        .select("*")
-        .limit(5);
-
+      const { data, error } = await supabase.from("jobs").select("*").limit(5);
       if (!error && data) setJobs(data);
     };
-
     fetchJobs();
   }, []);
 
   return (
     <div className="dashboard-container">
-      <h2>Welcome, {freelancerName}</h2>
+      <DashboardHeader name={freelancerName} />
 
-      <div className="dashboard-section">
+      <section className="dashboard-section">
         <h3>Suggested Jobs</h3>
         {jobs.length ? (
           <ul>
@@ -37,7 +32,7 @@ export default function FreelancerDashboard() {
         ) : (
           <p>No jobs available.</p>
         )}
-      </div>
+      </section>
     </div>
   );
 }
