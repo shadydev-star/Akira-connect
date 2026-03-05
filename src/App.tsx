@@ -18,9 +18,30 @@ function App() {
   useEffect(() => {
     const checkUser = async (): Promise<void> => {
       try {
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        // First check if there's a session (this doesn't throw errors)
+        const { data: sessionData } = await supabase.auth.getSession();
+        
+        if (!sessionData.session) {
+          // No session means user is not logged in - that's fine!
+          console.log("No active session - user is not logged in");
+          setRole(null);
+          setLoading(false);
+          return;
+        }
 
-        if (userError) throw userError;
+        // Session exists, now get the verified user
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        
+        if (userError) {
+          // Check if it's an auth session error
+          if (userError.name === 'AuthSessionMissingError' || 
+              userError.message?.includes('Auth session missing')) {
+            console.log("Session expired or invalid");
+            setRole(null);
+            return;
+          }
+          throw userError;
+        }
 
         if (user) {
           const { data: profile, error: profileError } = await supabase
@@ -29,21 +50,68 @@ function App() {
             .eq("id", user.id)
             .single();
 
-          if (profileError) throw profileError;
-
-          if (profile) {
+          if (profileError) {
+            // Profile not found - user might need to complete signup
+            if (profileError.code === 'PGRST116') {
+              console.log("User profile not found");
+              setRole(null);
+            } else {
+              throw profileError;
+            }
+          } else if (profile) {
             setRole(profile.role as UserRole);
           }
         }
       } catch (err) {
-        console.error("Error checking user:", err);
-        setError(err instanceof Error ? err.message : "Failed to load user data");
+        // Only log errors that are NOT auth session issues
+        if (err instanceof Error) {
+          const isAuthError = err.name === 'AuthSessionMissingError' || 
+                             err.message?.includes('Auth session missing') ||
+                             err.message?.includes('JWT');
+          
+          if (!isAuthError) {
+            console.error("Error checking user:", err);
+            setError(err.message);
+          } else {
+            console.log("Authentication state: No valid session");
+            // No need to set error for auth issues
+          }
+        } else {
+          console.error("Unknown error:", err);
+          setError("Failed to load user data");
+        }
       } finally {
         setLoading(false);
       }
     };
 
     checkUser();
+
+    // Optional: Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log("Auth state changed:", event);
+        if (event === 'SIGNED_IN' && session?.user) {
+          // Fetch user profile on sign in
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", session.user.id)
+            .single();
+          
+          if (profile) {
+            setRole(profile.role as UserRole);
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setRole(null);
+        }
+      }
+    );
+
+    // Cleanup subscription
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
   if (loading) {
@@ -73,7 +141,6 @@ function App() {
     );
   }
 
-  // FIXED: Removed the return type annotation ": JSX.Element"
   const getRootRedirect = () => {
     switch (role) {
       case "freelancer":
