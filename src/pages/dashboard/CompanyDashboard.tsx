@@ -43,7 +43,7 @@ interface Applicant {
 }
 
 export default function CompanyDashboard() {
-  const [companyName, setCompanyName ] = useState("TechCorp Inc.");
+  const [companyName, _setCompanyName ] = useState("TechCorp Inc.");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "jobs" | "applicants">("overview");
@@ -67,7 +67,7 @@ export default function CompanyDashboard() {
     totalReviews: 24
   });
 
-  const [applicants, setApplicants] = useState<Applicant[]>([
+  const [applicants, _setApplicants] = useState<Applicant[]>([
     {
       id: "1",
       name: "Sarah Johnson",

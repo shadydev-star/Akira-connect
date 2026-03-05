@@ -42,14 +42,14 @@ interface Application {
 }
 
 export default function FreelancerDashboard() {
-  const [freelancerName, setFreelancerName] = useState("Freelancer");
+  const [freelancerName, _setFreelancerName] = useState("Freelancer");
   const [suggestedJobs, setSuggestedJobs] = useState<Job[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [savedJobs, setSavedJobs] = useState<string[]>([]);
 
-  const [stats, setStats] = useState({
+  const [stats, _setStats] = useState({
     profileViews: 142,
     applicationsSent: 12,
     interviews: 4,
